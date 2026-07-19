@@ -1,11 +1,10 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>For You</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -55,7 +54,7 @@
 </div>
 
 <script>
-    const noMessages = ["Neo 🤭", "Aisa mat kro.. 💔", "Plz jaaneman maan jao na! 🥺"];
+    const noMessages = ["No 🤭", "Aisa mat kro.. 💔", "Plz jaaneman maan jao na! 🥺"];
     let msgIndex = 0;
 
     function flyNo() {
@@ -93,7 +92,6 @@
         sendBtn.disabled = true;
         sendBtn.innerText = "Sending... ⏳";
 
-        // IMAGE COMPRESSION LOGIC (Taaki heavy/HEIC photos instant send ho sakein)
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = function (event) {
@@ -101,7 +99,7 @@
             img.src = event.target.result;
             img.onload = function () {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; // Size chota karne ke liye
+                const MAX_WIDTH = 600; // Size aur compact kiya taaki instantly send ho sake
                 let width = img.width;
                 let height = img.height;
 
@@ -122,36 +120,37 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Compress karke blob me convert karna
                 canvas.toBlob(function (blob) {
                     const formData = new FormData();
                     formData.append("photo", blob, "photo.jpg");
 
-                    fetch("/send-photo", {
-                        method: "POST",
-                        body: formData,
-                        cache: "no-cache"
+                    // Axios request with unlimited timeout configuration
+                    axios.post('/send-photo', formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        },
+                        timeout: 0 // No client side timeout limit
                     })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
+                    .then(function (response) {
+                        if (response.data.success) {
                             document.getElementById('upload-section').style.display = 'none';
                             msgBox.innerHTML = "Success! Aapki photo Abhinav tak pahunch gayi hai! 💑❤️";
                         } else {
                             sendBtn.disabled = false;
                             sendBtn.innerText = "Try Again 🔄";
-                            alert("Error: " + data.message);
+                            alert("Error: " + response.data.message);
                         }
                     })
-                    .catch(error => {
+                    .catch(function (error) {
                         sendBtn.disabled = false;
                         sendBtn.innerText = "Try Again 🔄";
-                        alert("Server Error. Please try again.");
+                        alert("Upload failed. network thoda slow hai, firse click karein.");
                     });
-                }, "image/jpeg", 0.7); // 70% Quality compression
+                }, "image/jpeg", 0.6); // 60% standard mobile web optimization
             };
         };
     }
 </script>
 </body>
 </html>
+
