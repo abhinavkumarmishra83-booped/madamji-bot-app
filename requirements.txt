@@ -1,7 +1,0 @@
-Flask
-requests
-gunicorn
-flask-cors
-Pillow
-pi-heif
-
